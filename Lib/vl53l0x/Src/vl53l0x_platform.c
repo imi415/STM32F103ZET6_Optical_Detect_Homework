@@ -26,15 +26,19 @@ VL53L0X_Error VL53L0X_UnlockSequenceAccess(VL53L0X_DEV Dev) {
 // the ranging_sensor_comms.dll will take care of the page selection
 VL53L0X_Error VL53L0X_WriteMulti(VL53L0X_DEV Dev, uint8_t index, uint8_t *pdata, uint32_t count) {
   __HAL_LOCK(Dev);
-  HAL_I2C_Mem_Write_DMA(Dev -> Instance, Dev -> Address, index, 0x01, pdata, count);
+  uint8_t buf[100] ={index, 0x00};
+  for (uint8_t i = 0; i < sizeof(pdata); i ++) {
+    buf[i + 1] = pdata[i];
+  }
+  HAL_I2C_Master_Transmit_DMA(Dev -> Instance, Dev -> Address, buf, count + 1);
   uint32_t tickStart = HAL_GetTick();
-  while(!Dev -> MemTxFlag) {
+  while(!Dev -> TxFlag) {
     if (HAL_GetTick() - tickStart > VL53L0X_MAX_DELAY_TICKS) {
       __HAL_UNLOCK(Dev);
       return VL53L0X_ERROR_TIME_OUT;
     }
   }
-  Dev -> MemTxFlag = 0;
+  Dev -> TxFlag = 0;
   __HAL_UNLOCK(Dev);
   return VL53L0X_ERROR_NONE;
 }
@@ -42,15 +46,24 @@ VL53L0X_Error VL53L0X_WriteMulti(VL53L0X_DEV Dev, uint8_t index, uint8_t *pdata,
 // the ranging_sensor_comms.dll will take care of the page selection
 VL53L0X_Error VL53L0X_ReadMulti(VL53L0X_DEV Dev, uint8_t index, uint8_t *pdata, uint32_t count) {
   __HAL_LOCK(Dev);
-  HAL_I2C_Mem_Read_DMA(Dev -> Instance, Dev -> Address, index, 0x01, pdata, count);
+  HAL_I2C_Master_Transmit_DMA(Dev -> Instance, Dev -> Address, &index, 0x01);
   uint32_t tickStart = HAL_GetTick();
-  while (!Dev -> MemRxFlag) {
+  while(!Dev -> TxFlag) {
     if (HAL_GetTick() - tickStart > VL53L0X_MAX_DELAY_TICKS) {
       __HAL_UNLOCK(Dev);
       return VL53L0X_ERROR_TIME_OUT;
     }
   }
-  Dev -> MemRxFlag = 0;
+  Dev -> TxFlag = 0;
+  HAL_I2C_Master_Receive_DMA(Dev -> Instance, Dev -> Address, pdata, count);
+  tickStart = HAL_GetTick();
+  while (!Dev -> RxFlag) {
+    if (HAL_GetTick() - tickStart > VL53L0X_MAX_DELAY_TICKS) {
+      __HAL_UNLOCK(Dev);
+      return VL53L0X_ERROR_TIME_OUT;
+    }
+  }
+  Dev -> RxFlag = 0;
   __HAL_UNLOCK(Dev);
   return VL53L0X_ERROR_NONE;
 }
@@ -110,16 +123,25 @@ VL53L0X_Error VL53L0X_WrDWord(VL53L0X_DEV Dev, uint8_t index, uint32_t data) {
 
 VL53L0X_Error VL53L0X_UpdateByte(VL53L0X_DEV Dev, uint8_t index, uint8_t AndData, uint8_t OrData) {
   __HAL_LOCK(Dev);
-  uint8_t buf[2] = {0x00};
-  HAL_I2C_Mem_Read_DMA(Dev -> Instance, Dev -> Address, index, 0x01, buf, 0x01);
+  HAL_I2C_Master_Transmit_DMA(Dev -> Instance, Dev -> Address, &index, 0x01);
   uint32_t tickStart = HAL_GetTick();
-  while(!Dev -> MemRxFlag) {
+  while(!Dev -> TxFlag) {
     if (HAL_GetTick() - tickStart > VL53L0X_MAX_DELAY_TICKS) {
       __HAL_UNLOCK(Dev);
       return VL53L0X_ERROR_TIME_OUT;
     }
   }
-  Dev -> MemRxFlag = 0;
+  Dev -> TxFlag = 0;
+  uint8_t buf[2] = {0x00};
+  HAL_I2C_Master_Receive_DMA(Dev -> Instance, Dev -> Address, buf, 0x01);
+  tickStart = HAL_GetTick();
+  while(!Dev -> RxFlag) {
+    if (HAL_GetTick() - tickStart > VL53L0X_MAX_DELAY_TICKS) {
+      __HAL_UNLOCK(Dev);
+      return VL53L0X_ERROR_TIME_OUT;
+    }
+  }
+  Dev -> RxFlag = 0;
   uint8_t tmp_byte = (buf[1] & AndData) | OrData;
   buf[0] = index;
   buf[1] = tmp_byte;
