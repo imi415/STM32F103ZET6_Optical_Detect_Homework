@@ -1,0 +1,3 @@
+[submodule "Lib/oled"]
+	path = Lib/oled
+	url = git@github.com:imi415/libstm32hal_oled1306.git

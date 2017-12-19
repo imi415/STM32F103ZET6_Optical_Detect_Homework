@@ -1,0 +1,7 @@
+#ifndef __USER_BOARD_H
+#define __USER_BOARD_H
+
+#define BOARD_OLED_I2C_INTERFACE hi2c1
+#define BOARD_VL53L0X_I2C_INTERFACE hi2c1
+
+#endif
