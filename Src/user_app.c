@@ -20,6 +20,7 @@ uint32_t vl_ref_spad_count;
 uint8_t vl_is_aperture_spads;
 uint8_t vl_vhv_settings;
 uint8_t vl_phase_cal;
+FixPoint1616_t vl_limit_check_current;
 
 uint8_t i2c_counter = 0;
 
@@ -40,15 +41,15 @@ void setup(void) {
   vl_print_info();
   vl_measure_init();
 
-  HAL_Delay(5000);
-  OLED_Clear(&oled1);
-  OLED_Clear(&oled2);
   HAL_GPIO_WritePin(LED_2_GPIO_Port, LED_2_Pin, GPIO_PIN_RESET);
 }
 
 void loop(void) {
   HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
-  HAL_Delay(500);
+  vl_range_once();
+  HAL_Delay(10);
+  HAL_GPIO_TogglePin(LED_2_GPIO_Port, LED_2_Pin);
+  HAL_Delay(190);
 }
 
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {
@@ -103,28 +104,29 @@ void vl_print_info(void) {
   OLED_String_Display(&oled1, 0, 2, buf);
   snprintf(buf, 50, "Ver: %d.%d", vl_info.ProductRevisionMajor, vl_info.ProductRevisionMinor);
   OLED_String_Display(&oled1, 0, 3, buf);
+  OLED_String_Display(&oled1, 0, 4, "2014211844");
 }
 
 void vl_measure_init(void) {
   VL53L0X_Error stat = VL53L0X_ERROR_NONE;
   if (stat == VL53L0X_ERROR_NONE) {
     stat = VL53L0X_StaticInit(vlp);
-    OLED_String_Display(&oled2, 0, 0, "SI");
+    OLED_String_Display(&oled2, 0, 0, "SI   ");
   }
 
   if (stat == VL53L0X_ERROR_NONE) {
     stat = VL53L0X_PerformRefCalibration(vlp, &vl_vhv_settings, &vl_phase_cal);
-    OLED_String_Display(&oled2, 0, 0, "PRC");
+    OLED_String_Display(&oled2, 0, 0, "PRC  ");
   }
 
   if (stat == VL53L0X_ERROR_NONE) {
     stat = VL53L0X_PerformRefSpadManagement(vlp, &vl_ref_spad_count, &vl_is_aperture_spads);
-    OLED_String_Display(&oled2, 0, 0, "PRSM");
+    OLED_String_Display(&oled2, 0, 0, "PRSM ");
   }
 
   if (stat == VL53L0X_ERROR_NONE) {
     stat = VL53L0X_SetDeviceMode(vlp, VL53L0X_DEVICEMODE_SINGLE_RANGING);
-    OLED_String_Display(&oled2, 0, 0, "SDM");
+    OLED_String_Display(&oled2, 0, 0, "SDM  ");
   }
 
   if (stat == VL53L0X_ERROR_NONE) {
@@ -146,4 +148,19 @@ void vl_measure_init(void) {
     stat = VL53L0X_SetLimitCheckValue(vlp, VL53L0X_CHECKENABLE_RANGE_IGNORE_THRESHOLD, (FixPoint1616_t)(1.5*0.023*65536));
     OLED_String_Display(&oled2, 0, 0, "SLCE4");
   }
+  OLED_String_Display(&oled2, 0, 0, "STBY ");
+}
+
+void vl_range_once(void) {
+  VL53L0X_Error stat;
+  char buf[50];
+  stat = VL53L0X_PerformSingleRangingMeasurement(vlp, &vl_data);
+  VL53L0X_GetLimitCheckCurrent(vlp, VL53L0X_CHECKENABLE_RANGE_IGNORE_THRESHOLD, &vl_limit_check_current);
+  snprintf(buf, 50, "RI_THRESH: %ld", vl_limit_check_current);
+  OLED_String_Display(&oled2, 0, 1, buf);
+  if (stat != VL53L0X_ERROR_NONE) return;
+  snprintf(buf, 50, "Dist: %imm    ", vl_data.RangeMilliMeter);
+  OLED_String_Display(&oled2, 0, 2, buf);
+  snprintf(buf, 50, "RTT Count: %d", vl_data.EffectiveSpadRtnCount);
+  OLED_String_Display(&oled2, 0, 3, buf);
 }

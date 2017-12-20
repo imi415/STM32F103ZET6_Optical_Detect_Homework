@@ -10,6 +10,7 @@ void loop(void);
 void led_stat(void);
 void vl_print_info(void);
 void vl_measure_init(void);
+void vl_range_once(void);
 
 #ifdef __cplusplus
 }
